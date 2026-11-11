@@ -1,91 +1,39 @@
 
-# from app.services.ingestion import ingest
-# from app.services.chat import RAGServices
+from contextlib import asynccontextmanager
+from typing import Any, AsyncGenerator, Annotated
+
+from fastapi import FastAPI, HTTPException, Request
+from pydantic import BaseModel, StringConstraints
+
+from app.services.chat import RAGServices, Answer
 
 
-# if __name__ == "__main__":
-
-#     # Step 1: Ingest document
-#     total_chunks = ingest()
-
-#     print(f"\nIngestion completed: {total_chunks} chunks")
-
-#     # Step 2: Initialize RAG service
-#     rag = RAGServices()
-
-#     try:
-#         # Step 3: Ask questions
-#         while True:
-
-#             question = input("\nAsk your question (type 'exit' to quit): ")
-
-#             if question.lower().strip() == "exit":
-#                 break
-
-#             try:
-#                 result = rag.ask(question)
-
-#                 print("\nAnswer:")
-#                 print(result.answer)
-
-#                 print("\nSources:")
-
-#                 for source in result.sources:
-#                     print(source.model_dump())
-
-#             except ValueError as e:
-#                 print(f"Error: {e}")
-
-#     finally:
-#         rag.close()
-#         print("\nRAG service closed.")
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    app.state.rag = RAGServices()
+    yield
+    app.state.rag.close()
 
 
+app = FastAPI(title="Clause AI APIs", lifespan=lifespan)
 
 
-from app.services.ingestion import ingest
-from app.services.chat import RAGServices
+class AskQuestion(BaseModel):
+    question: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=1,
+            max_length=2000
+        )
+    ]
 
 
-def main():
-
-    # Step 1: Ingest document
-    total_chunks = ingest()
-
-    print(f"\nIngestion completed: {total_chunks} chunks")
-
-    # Step 2: Initialize RAG service
-    rag = RAGServices()
-
-    try:
-        # Step 3: Ask questions
-        while True:
-
-            question = input(
-                "\nAsk your question (type 'exit' to quit): "
-            ).strip()
-
-            if question.lower() == "exit":
-                break
-
-            try:
-                result = rag.ask(question)
-
-                print("\nAnswer:")
-                print(result.answer)
-
-                print("\nSources:")
-
-                for source in result.sources:
-                    print(source.model_dump())
-
-            except ValueError as e:
-                print(f"Error: {e}")
-
-    finally:
-        rag.close()
-        print("\nRAG service closed.")
+@app.get("/")
+def health():
+    return {"status": "OK"}
 
 
-if __name__ == "__main__":
-    main()
+@app.post("/ask", response_model=Answer)
+def ask_query(body: AskQuestion, req: Request):
+    return req.app.state.rag.ask(body.question)
