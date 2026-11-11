@@ -9,3 +9,9 @@ wheels/
 # Virtual environments
 .venv
 .env
+
+
+
+# DataBase
+qdrant_data/
+vector_stores/
